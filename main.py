@@ -4,7 +4,7 @@ import csv
 
 import matplotlib.pyplot as plt
 
-GENERATIONS = 10000
+GENERATIONS = 20000
 POPULATION = 64
 
 class City:
@@ -80,7 +80,7 @@ class Population:
     def mutate_population(self):
         # trigger a change of some kind within an agent
         for agent in self.agents:
-            while random.random() < min(0.2, (7500/agent.fitness)**2):
+            if random.random() < min(0.3, (7500/agent.fitness)):
                 agent.mutate()  
         return
 
@@ -92,6 +92,10 @@ class Population:
     def get_crossover(self, agent_a, agent_b):
 
         crossover_point = random.randint(1, len(agent_a.get_order()) - 2)
+        if random.random() > 0.5:
+            helper = agent_b
+            agent_b = agent_a
+            agent_a = helper
 
         if random.random() > 0.5:
             child_order = agent_a.get_order()[:crossover_point] 
@@ -149,16 +153,22 @@ def import_cities(file_name):
 
 
 def main():
+    seed = random.random()
+    random.seed(seed)
+    print(f"Random seed: {seed}")
+
     cities = import_cities("./berlin52.tsp.3c.csv")
     myPopulation = Population(population_size=POPULATION, cities=cities)
     avg_fitness_per_gen = []
-
+    best_fitness = 50000
 
     for _ in range(0,GENERATIONS):
         myPopulation.cull_population(POPULATION)
-        myPopulation.mutate_population()
         for _ in range(20):
             myPopulation.crossover_population()
+        myPopulation.mutate_population()
+
+        best_fitness = min(best_fitness, myPopulation.get_best().fitness)
 
         avg_fitness = sum(agent.fitness for agent in myPopulation.agents) / len(myPopulation.agents)
         avg_fitness_per_gen.append(avg_fitness)
@@ -169,6 +179,7 @@ def main():
     bestAgent = myPopulation.get_best()
     print(bestAgent.get_order())
     print(bestAgent.fitness)
+    print(f"Best achieved fitness: {best_fitness}")
 
     plt.plot(range(GENERATIONS), avg_fitness_per_gen, label="Average Fitness")
     plt.xlabel('Generation')
