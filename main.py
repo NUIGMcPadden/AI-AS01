@@ -1,11 +1,15 @@
 import random
 import math
 import csv
+import time
 
 import matplotlib.pyplot as plt
 
-GENERATIONS = 20000
+GENERATIONS = 1000
 POPULATION = 64
+
+MUTATION_RATE = 0.05
+CROSSOVER_RATE = 0.95
 
 class City:
     # Representing cities as a class as it's a more readable method for storing their data
@@ -36,6 +40,7 @@ class Agent:
         self.order=order
 
     def mutate(self):
+        # swaps the placement of two random cities
         idx1, idx2 = random.sample(range(1, len(self.order)-1), 2)
         self.order[idx1], self.order[idx2] = self.order[idx2], self.order[idx1]
         self.get_fitness()
@@ -62,12 +67,14 @@ class Population:
             self.agents.append(Agent(get_random_order(cities)))
 
     def roulette_wheel(self):
+        # weighted selection by roulette
         weights = [agent.fitness**2.5 for agent in self.agents]
         selected_agent = random.choices(self.agents, weights=weights, k=1)[0]
         return selected_agent
 
     def tournament(self):
-        tournament = random.sample(self.agents, 20)    
+        # take the best agent from a tournament of a subpopulation
+        tournament = random.sample(self.agents, 16)    
         best_agent = max(tournament, key=lambda agent: agent.fitness)
         return best_agent
 
@@ -77,10 +84,10 @@ class Population:
             self.agents.remove(self.get_worst())
         return        
 
-    def mutate_population(self):
+    def mutate_population(self, current_generation, mutation_rate):
         # trigger a change of some kind within an agent
         for agent in self.agents:
-            if random.random() < min(0.3, (7500/agent.fitness)):
+            if random.random() < mutation_rate*(current_generation/GENERATIONS):
                 agent.mutate()  
         return
 
@@ -90,7 +97,8 @@ class Population:
         return
 
     def get_crossover(self, agent_a, agent_b):
-
+        # randomly choose a point, and take a section before or after that point from one parent
+        # cities not added to the child are then appended in the order they appear in the second parent
         crossover_point = random.randint(1, len(agent_a.get_order()) - 2)
         if random.random() > 0.5:
             helper = agent_b
@@ -153,6 +161,8 @@ def import_cities(file_name):
 
 
 def main():
+    start_time = time.time()
+
     seed = random.random()
     random.seed(seed)
     print(f"Random seed: {seed}")
@@ -160,19 +170,34 @@ def main():
     cities = import_cities("./berlin52.tsp.3c.csv")
     myPopulation = Population(population_size=POPULATION, cities=cities)
     avg_fitness_per_gen = []
-    best_fitness = 50000
+    best_fitness = {
+        "fitness": 999999999,
+        "mutation": "n/a",
+        "crossover": "n/a",
+        "order": "n/a"
+    }
 
-    for _ in range(0,GENERATIONS):
-        myPopulation.cull_population(POPULATION)
-        for _ in range(20):
-            myPopulation.crossover_population()
-        myPopulation.mutate_population()
+    # The values in brackets here can be adjusted to use grid search or to test various parameters
+    for i in [19]:
+        for j in [1]:
+            for _ in range(0,GENERATIONS):
+                myPopulation.cull_population(POPULATION)
+                while random.random() < (i/20.0):
+                    myPopulation.crossover_population()
+                myPopulation.mutate_population(_, (j/20.0))
 
-        best_fitness = min(best_fitness, myPopulation.get_best().fitness)
+                # Saves a record of the best agent and its parameters
+                best_agent = myPopulation.get_best()
+                if best_fitness["fitness"] > best_agent.fitness:
+                    best_fitness["fitness"] = best_agent.fitness
+                    best_fitness["mutation"] = j
+                    best_fitness["crossover"] = i
+                    best_fitness["order"] = best_agent.get_order()
 
-        avg_fitness = sum(agent.fitness for agent in myPopulation.agents) / len(myPopulation.agents)
-        avg_fitness_per_gen.append(avg_fitness)
+                avg_fitness = sum(agent.fitness for agent in myPopulation.agents) / len(myPopulation.agents)
+                avg_fitness_per_gen.append(avg_fitness)
 
+    end_time = time.time()
 
     print("done simulating")
     myPopulation.get_fitnesses()
@@ -180,6 +205,8 @@ def main():
     print(bestAgent.get_order())
     print(bestAgent.fitness)
     print(f"Best achieved fitness: {best_fitness}")
+
+    print(f"Elapsed time: {end_time - start_time} seconds")
 
     plt.plot(range(GENERATIONS), avg_fitness_per_gen, label="Average Fitness")
     plt.xlabel('Generation')
